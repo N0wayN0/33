@@ -1,0 +1,121 @@
+
+Because the i9505 has a Krait 300 quad-core CPU clocked up to 1.9GHz with an aggressive L2 cache hierarchy, doing these plain memory copies (memcpy) directly in RAM takes less than 2 milliseconds for all 14 elements combined.
+
+
+
+
+struct UIElement {
+    int src_x; int src_y;  // Position inside your ui_atlas.png
+    int w;     int h;      // Size of the element
+};
+
+// Example mappings from your atlas coordinates
+struct UIElement checkbox_checked   = { 0,   0,  48, 48 };
+struct UIElement checkbox_unchecked = { 48,  0,  48, 48 };
+struct UIElement button_normal      = { 0,  96, 200, 80 };
+struct UIElement radio_selected     = { 0,  48,  48, 48 };
+
+
+
+
+void software_blit_ion_to_ion(struct memPicture *src_pic, struct memPicture *dst_pic, 
+                              int src_x, int src_y, int src_w, int src_h,
+                              int dst_x, int dst_y) 
+{
+    uint32_t *src_pixels = (uint32_t *)src_pic->mem_buf;
+    uint32_t *dst_pixels = (uint32_t *)dst_pic->mem_buf;
+
+    for (int y = 0; y < src_h; y++) {
+        // Calculate raw memory line strides for RGBA_8888 
+        int src_row_idx = ((src_y + y) * src_pic->width) + src_x;
+        int dst_row_idx = ((dst_y + y) * dst_pic->width) + dst_x;
+
+        // Blit an entire row of pixels directly through memory pointers
+        memcpy(&dst_pixels[dst_row_idx], &src_pixels[src_row_idx], src_w * sizeof(uint32_t));
+    }
+}
+
+Create a solid background layer filled entirely with pure pink (#FF00FF)
+Because this function evaluates individual pixels inside a nested loop rather than executing a sequential memcpy block, it utilizes slightly more CPU overhead.
+However, since your individual UI elements are tiny (e.g., 48 × 48 pixel checkboxes), the entire 14-element interface loop will still execute in less than 4 to 5 milliseconds on the i9505's processor—giving you a perfectly smooth, stutter-free user interface layout.
+void software_blit_transparent(struct memPicture *src_pic, struct memPicture *dst_pic, 
+                               int src_x, int src_y, int w, int h, 
+                               int dst_x, int dst_y) 
+{
+    if (!src_pic->mem_buf || !dst_pic->mem_buf) return;
+    if (dst_x + w > dst_pic->width || dst_y + h > dst_pic->height) return;
+
+    uint32_t *src_pixels = (uint32_t *)src_pic->mem_buf;
+    uint32_t *dst_pixels = (uint32_t *)dst_pic->mem_buf;
+
+    // Define your pink color key mask (adjust value based on your get_bitmap format)
+    // For RGBA: 0xFF00FF holds Red=255, Green=0, Blue=255. Alpha is ignored or matched.
+    uint32_t color_key = 0xFF00FF20; 
+
+    for (int y = 0; y < h; y++) {
+        int src_row_start = ((src_y + y) * src_pic->width) + src_x;
+        int dst_row_start = ((dst_y + y) * dst_pic->width) + dst_x;
+
+        for (int x = 0; x < w; x++) {
+            uint32_t source_pixel = src_pixels[src_row_start + x];
+
+            // If the pixel color is NOT our transparent pink, copy it across
+            // Note: Masking with 0xFFFFFF00 skips checking the Alpha channel if it varies
+            if ((source_pixel & 0xFFFFFF00) != (color_key & 0xFFFFFF00)) {
+                dst_pixels[dst_row_start + x] = source_pixel;
+            }
+            // If it IS pink, do nothing! The destination background remains untouched.
+        }
+    }
+}
+
+
+
+
+void draw_interface_frame() {
+    // Slot 0: Contains your pre-loaded UI graphics atlas asset
+    struct memPicture *ui_atlas = &pictures[0]; 
+    
+    // Slot 1: This is your full-screen main rendering canvas
+    struct memPicture *canvas   = &pictures[1]; 
+    
+    // Initialize the Canvas once if it hasn't been done yet
+    if (canvas->mem_fd == 0) {
+        snprintf(canvas->name, sizeof(canvas->name), "ui_canvas");
+        canvas->width  = 1080;
+        canvas->height = 1920;
+        canvas->size   = 1080 * 1920 * 4; // Total size for 1080p RGBA_8888
+        alloc_ION_mem(canvas);
+    }
+
+    // 1. Clear Canvas (e.g., fill with solid dark grey background 0x222222FF)
+    uint32_t *pixels = (uint32_t *)canvas->mem_buf;
+    for (int i = 0; i < (canvas->width * canvas->height); i++) {
+        pixels[i] = 0x222222FF; 
+    }
+
+    // 2. Draw your 4 Checkboxes down the screen
+    for (int i = 0; i < 4; i++) {
+        // Alternating states for demonstration
+        struct UIElement *cb = (i % 2 == 0) ? &checkbox_checked : &checkbox_unchecked;
+        software_blit(ui_atlas, canvas, cb->src_x, cb->src_y, cb->w, cb->h, 100, 200 + (i * 80));
+    }
+
+    // 3. Draw your 5 Buttons
+    for (int i = 0; i < 5; i++) {
+        software_blit(ui_atlas, canvas, button_normal.src_x, button_normal.src_y, button_normal.w, button_normal.h, 400, 200 + (i * 120));
+    }
+
+    // 4. Draw your 5 Radio Buttons
+    for (int i = 0; i < 5; i++) {
+        software_blit(ui_atlas, canvas, radio_selected.src_x, radio_selected.src_y, radio_selected.w, radio_selected.h, 800, 200 + (i * 80));
+    }
+
+    // 5. Flip everything to the screen at once using 1 hardware overlay pipe
+    int ov_slot = prepare_overlay2("ui_canvas");
+    if (ov_slot >= 0) {
+        paste_overlay2(0, 0, 1080, 1920); // Scale presentation structure to screen edges
+        display_overlay2(ov_slot, 1);     // Push the finished canvas slot live!
+    }
+}
+

@@ -1,0 +1,41 @@
+#include <sys/types.h>
+#include <unistd.h>
+#include <grp.h>
+
+int main(int argc, char **argv) {
+    // Keep root UID, but explicitly force process into Android's graphics group (1003)
+    gid_t groups[] = { 1003 }; 
+    if (setgroups(1, groups) < 0) {
+        perror("Failed to set graphics group");
+    }
+    
+    // Continue with your init_overlays(), fbfd setup, etc...
+}
+
+
+
+drop to 1003 BLIT and go back to 0
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/ioctl.h>
+
+int perform_ambient_blit(int fbfd, void *blit_list_ptr) {
+    // Real = 1003, Effective = 1003, Saved = 0 (Keeps a backup handle to root)
+    if (setresgid(1003, 1003, 0) < 0) {
+        perror("Failed to temporarily assume graphics group");
+        return -1;
+    }
+
+    // 1. Run the ioctl while carrying group 1003 clearance
+    int ioctl_result = ioctl(fbfd, MSMFB_BLIT, blit_list_ptr);
+
+    // 2. Re-escalate back to raw root state using our saved tracking reference slot
+    if (setresgid(0, 0, 0) < 0) {
+        perror("CRITICAL: Failed to recover root privileges");
+        // Handle emergency shutdown or recovery state here
+    }
+
+    return ioctl_result;
+}
+
