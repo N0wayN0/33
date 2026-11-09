@@ -664,7 +664,7 @@ exit(0);
 }
 */
 zmienic na
-software_blit(element Id, dest x dest y)
+software_blit(canvas draft, element Id, dest x dest y)
 void software_blit( int src_x, int src_y, int src_w, int src_h, int dst_x, int dst_y) 
 {
     struct memPicture *atlas = &ui_atlas; 
