@@ -663,6 +663,8 @@ exit(0);
 
 }
 */
+zmienic na
+software_blit(element Id, dest x dest y)
 void software_blit( int src_x, int src_y, int src_w, int src_h, int dst_x, int dst_y) 
 {
     struct memPicture *atlas = &ui_atlas; 
@@ -705,6 +707,12 @@ int prepare_canvas() {
             alloc_ION_mem(canvas);
         }
     }
+    musi zaznachzyc ktory jest aktywny
+    snprintf(pictures[1].name, sizeof(pictures[1].name), "activ_canvas");
+    I return int of draft_canvas
+    ten int bedzie podany do funkcji
+    software_blit zeby NIE musical sprawdzac
+    za kazdym razem gdy blituje
 }
 
 int display_canvas() {
