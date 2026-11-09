@@ -667,6 +667,12 @@ zmienic na
 software_blit(canvas draft, element Id, dest x dest y)
 void software_blit( int src_x, int src_y, int src_w, int src_h, int dst_x, int dst_y) 
 {
+    będę musiał pobrać src_x y w H urzywajac element id
+    get_widget(int id &src_x &src_y w taki sposob
+    struct memPicture *atlas = &ui_atlas;
+    canvas = &pictures[draft];
+
+    
     struct memPicture *atlas = &ui_atlas; 
     struct memPicture *canvas = NULL; 
     //printf("(%s) current_canvas: %d \n", __func__, current_canvas);
@@ -708,11 +714,13 @@ int prepare_canvas() {
         }
     }
     musi zaznachzyc ktory jest aktywny
-    snprintf(pictures[1].name, sizeof(pictures[1].name), "activ_canvas");
+    snprintf(pictures[current_canvas].name, sizeof(pictures[current_canvas].name), "activ_canvas");
     I return int of draft_canvas
     ten int bedzie podany do funkcji
     software_blit zeby NIE musical sprawdzac
     za kazdym razem gdy blituje
+    current_canvas = (current_canvas + 1) % 2;
+    to powinno dac draft_canvas id 
 }
 
 int display_canvas() {
